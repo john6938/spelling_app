@@ -19,6 +19,23 @@ const LEVEL_NAMES: Record<number, string> = {
   8: 'Master level',
 };
 
+// ── Site header ───────────────────────────────────────────────
+
+export function showHeader(username: string): void {
+  const header = document.getElementById('site-header')!;
+  header.classList.remove('hidden');
+  header.innerHTML = `
+    <div class="header-logo">⭐ Spelling Stars</div>
+    <div class="header-user">👤 ${username}</div>
+  `;
+}
+
+export function hideHeader(): void {
+  const header = document.getElementById('site-header')!;
+  header.classList.add('hidden');
+  header.innerHTML = '';
+}
+
 // ── Helpers ───────────────────────────────────────────────────
 
 function el(html: string): HTMLElement {
@@ -181,28 +198,25 @@ export interface PlacementCallbacks {
 export function renderPlacement(item: PlacementItem, cb: PlacementCallbacks): void {
   const pct = Math.round((item.itemNumber / item.total) * 100);
 
-  // Placement is audio-only — no letter hints. Word length is shown as blank slots
-  // so the learner knows how many letters to type.
-  const blankSlots = item.display.map(() => `<span class="letter-slot blank"></span>`).join('');
-
   setApp(`
     <div class="card">
       <div class="card-title">Finding your level…</div>
-      <div class="card-subtitle">Listen and spell — item ${item.itemNumber} of ${item.total}</div>
+      <div class="card-subtitle">Listen carefully and write the complete word</div>
       <div class="progress-bar-wrap">
         <div class="progress-bar-fill" style="width:${pct}%"></div>
       </div>
-      <div class="mt-16 text-center">
+      <div class="muted text-center mt-8">Word ${item.itemNumber} of ${item.total}</div>
+      <div class="mt-20 text-center">
         <button class="btn-audio" id="audio-btn">🔊 Say the word</button>
       </div>
-      <div class="letter-display mt-12">${blankSlots}</div>
       <input
         type="text"
         id="answer-input"
-        placeholder="Type what you hear…"
+        placeholder="Type the complete word…"
         autocomplete="off"
         autocorrect="off"
         spellcheck="false"
+        class="mt-16"
       />
       <div class="mt-12" style="display:flex; gap:8px;">
         <button class="btn-primary" id="check-btn">Check ✓</button>

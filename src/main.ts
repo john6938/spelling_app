@@ -25,6 +25,8 @@ import {
   renderStageComplete,
   showBonusResult,
   renderLevelComplete,
+  showHeader,
+  hideHeader,
 } from './ui/screens';
 
 // ─────────────────────────────────────────────────────────────
@@ -62,6 +64,7 @@ function persist(): void {
 function showLogin(): void {
   const savedName = hasConsent() ? (getSavedUsername() ?? null) : null;
 
+  hideHeader();
   renderLogin(savedName, {
     onLogin(username, saveProgress) {
       setConsent(saveProgress);
@@ -80,6 +83,7 @@ function showLogin(): void {
         recognition = new RecognitionSystem();
       }
 
+      showHeader(username);
       showDashboard();
     },
   });

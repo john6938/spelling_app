@@ -18,11 +18,12 @@ import { spellingData, SpellingWord } from '../utils/spellingData';
 import { generateScaffold } from './scaffolding';
 
 const PLACEMENT_TOTAL = 20;
-const INITIAL_LEVEL   = 3;           // start at mid-low difficulty
+const INITIAL_LEVEL   = 3;   // start at mid-low difficulty
+const MIN_LEVEL       = 0;   // level 0 = very simple 2-letter words
+const MAX_LEVEL       = 8;
 const PLACEMENT_SCAFFOLD: ScaffoldLevel = 4; // audio only — no letter hints
 
 // How many tail items to inspect when computing the recommendation.
-// The learner's level usually stabilises within the last third of the test.
 const STABILISATION_WINDOW = 8;
 
 interface TaggedWord {
@@ -35,12 +36,33 @@ interface ResultRecord {
   correct: boolean;
 }
 
+// Level 0: very simple 2-letter words for the bottom of the placement range.
+// Used only during placement — not part of the main learning content.
+const LEVEL_0_WORDS: SpellingWord[] = [
+  { word: 'at', difficulty: 0, pattern: 'vc',  patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'it', difficulty: 0, pattern: 'vc',  patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'in', difficulty: 0, pattern: 'vc',  patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'on', difficulty: 0, pattern: 'vc',  patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'up', difficulty: 0, pattern: 'vc',  patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'be', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'do', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'go', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'he', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'me', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'we', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'no', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'so', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'my', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'by', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
+];
+
 /**
- * Builds a pool of words tagged with their lexical level,
- * sampling from early, mid, and late stages of each level.
+ * Builds the placement word pool.
+ * Level 0: simple 2-letter words (placement floor).
+ * Levels 1–8: sampled from spellingData.
  */
 function buildPlacementPool(): TaggedWord[] {
-  const pool: TaggedWord[] = [];
+  const pool: TaggedWord[] = LEVEL_0_WORDS.map(w => ({ word: w, level: 0 }));
   const stagesToSample = [1, 5, 10];
 
   for (const [levelStr, stages] of Object.entries(spellingData)) {
@@ -79,9 +101,9 @@ export class PlacementEngine {
 
     // Adapt difficulty by level only — no scaffold changes
     if (isCorrect) {
-      this.currentLevel = Math.min(this.currentLevel + 1, 8);
+      this.currentLevel = Math.min(this.currentLevel + 1, MAX_LEVEL);
     } else {
-      this.currentLevel = Math.max(this.currentLevel - 1, 1);
+      this.currentLevel = Math.max(this.currentLevel - 1, MIN_LEVEL);
     }
 
     const done = this.results.length >= PLACEMENT_TOTAL;
@@ -128,7 +150,9 @@ export class PlacementEngine {
    */
   private computeRecommendation(): { level: number; scaffold: ScaffoldLevel } {
     const tail = this.results.slice(-STABILISATION_WINDOW);
-    const recommendedLevel = Math.min(...tail.map(r => r.level));
+    const lowestInTail = Math.min(...tail.map(r => r.level));
+    // Level 0 is placement-only — clamp recommendation to level 1 minimum
+    const recommendedLevel = Math.max(lowestInTail, 1);
     return { level: recommendedLevel, scaffold: 0 };
   }
 }
