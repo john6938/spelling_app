@@ -18,6 +18,7 @@ import {
 
 import { spellingData, SpellingWord } from '../utils/spellingData';
 import { generateScaffold, stepUp, stepDown, SCAFFOLD_POINTS } from './scaffolding';
+import { isHomophoneOf } from '../utils/homophones';
 import {
   getMasteryThreshold,
   isNearMastery,
@@ -219,7 +220,28 @@ export class LearningEngine {
       ? this.nearMasteryWord
       : this.wordQueue[this.wordIndex];
 
-    const isCorrect = input.trim().toLowerCase() === targetWord.word.toLowerCase();
+    const trimmed = input.trim().toLowerCase();
+    const isCorrect = trimmed === targetWord.word.toLowerCase();
+
+    // ── Homophone check ────────────────────────────────────
+    // If the learner typed a valid homophone (different spelling, same sound),
+    // praise them and redirect — do NOT count as an attempt toward the quiz.
+    if (!isCorrect && isHomophoneOf(trimmed, targetWord.word)) {
+      return {
+        isCorrect: false,
+        isHomophoneAttempt: true,
+        pointsEarned: 0,
+        correctWord: targetWord.word,
+        newScaffold: scaffold,   // no scaffold change — same word, same support
+        quizComplete: false,
+        stagePassed: false,
+        stageComplete: false,
+        nearMasteryTriggered: false,
+        levelPreviewUnlocked: false,
+        levelComplete: false,
+      };
+    }
+
     const pointsEarned = isCorrect ? SCAFFOLD_POINTS[scaffold] : 0;
 
     // Scaffold adapts after every response
@@ -290,6 +312,7 @@ export class LearningEngine {
 
     return {
       isCorrect,
+      isHomophoneAttempt: false,
       pointsEarned,
       correctWord: targetWord.word,
       newScaffold,
@@ -473,6 +496,7 @@ export class LearningEngine {
 
     return {
       isCorrect,
+      isHomophoneAttempt: false,
       pointsEarned,
       correctWord: targetWord.word,
       newScaffold,

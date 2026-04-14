@@ -21,6 +21,7 @@ import {
   renderPlacementResult,
   renderQuiz,
   showQuizFeedback,
+  showHomophoneFeedback,
   renderStageComplete,
   showBonusResult,
   renderLevelComplete,
@@ -183,7 +184,14 @@ function showQuiz(): void {
     },
     {
       onAnswer(input) {
-        const result    = engine.submitAttempt(input);
+        const result = engine.submitAttempt(input);
+
+        // Homophone: valid alternative spelling — praise and redirect, don't advance
+        if (result.isHomophoneAttempt) {
+          showHomophoneFeedback(result.correctWord, showQuiz);
+          return;
+        }
+
         const motResult = motivation.recordAttempt(result.isCorrect, result.pointsEarned);
 
         if (result.isCorrect) quizCorrect++;

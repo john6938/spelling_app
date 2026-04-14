@@ -58,6 +58,7 @@ export interface WordPresentation {
 
 export interface AttemptResult {
   isCorrect: boolean;
+  isHomophoneAttempt: boolean;      // user typed a valid homophone — praise and redirect
   pointsEarned: number;
   correctWord: string;              // always returned so UI can show it after an error
   newScaffold: ScaffoldLevel;       // scaffold to use for the next word

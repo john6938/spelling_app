@@ -353,6 +353,29 @@ export function showQuizFeedback(
   setTimeout(onNext, 1500);
 }
 
+/**
+ * Shown when the learner types a valid homophone of the target word.
+ * Praises them and redirects to the correct spelling.
+ * Re-renders the quiz after a short pause (same word, same scaffold).
+ */
+export function showHomophoneFeedback(correctWord: string, onNext: () => void): void {
+  const feedback = document.getElementById('feedback');
+  const input    = document.getElementById('answer-input') as HTMLInputElement | null;
+  const checkBtn = document.getElementById('check-btn') as HTMLButtonElement | null;
+
+  if (feedback) {
+    feedback.className = 'feedback correct';
+    feedback.textContent = `✓ That's another spelling of that sound! Now try: "${correctWord}"`;
+  }
+
+  // Clear the input so the learner can retype
+  if (input)    { input.value = ''; input.disabled = false; input.focus(); }
+  if (checkBtn) { checkBtn.disabled = false; }
+
+  // Short pause then re-render the same word (onNext = showQuiz for same word)
+  setTimeout(onNext, 2000);
+}
+
 // ── Stage Complete Screen ─────────────────────────────────────
 
 export interface StageCompleteCallbacks {
@@ -410,12 +433,51 @@ export function renderStageComplete(data: StageCompleteData, cb: StageCompleteCa
   document.getElementById('continue-btn')!.addEventListener('click', cb.onContinue);
 }
 
+/**
+ * Spins a rapidly-changing number on the bonus button, then lands on
+ * the actual bonus amount with a celebration message.
+ */
 export function showBonusResult(amount: number, newTotal: number): void {
-  const btn = document.getElementById('bonus-btn');
+  const btn = document.getElementById('bonus-btn') as HTMLButtonElement | null;
   if (!btn) return;
-  btn.textContent = `🎉 +${amount} bonus points! (${newTotal} total)`;
-  (btn as HTMLButtonElement).disabled = true;
-  btn.className = 'btn-secondary mt-12';
+
+  btn.disabled = true;
+
+  const MIN = 10, MAX = 59;
+  let elapsed = 0;
+
+  function randomNum(): number {
+    return Math.floor(Math.random() * (MAX - MIN + 1)) + MIN;
+  }
+
+  // Phase 1: fast spin for 1400ms (every 60ms)
+  const fast = setInterval(() => {
+    btn.textContent = `🎁 ${randomNum()} points?`;
+    elapsed += 60;
+    if (elapsed >= 1400) {
+      clearInterval(fast);
+      elapsed = 0;
+
+      // Phase 2: slow spin for 800ms (every 160ms)
+      const slow = setInterval(() => {
+        btn.textContent = `🎁 ${randomNum()} points?`;
+        elapsed += 160;
+        if (elapsed >= 800) {
+          clearInterval(slow);
+
+          // Land on the actual amount
+          btn.textContent = `🎉 +${amount} bonus points!`;
+          btn.className = 'btn-gold mt-12';
+          btn.style.transform = 'scale(1.05)';
+          setTimeout(() => { btn.style.transform = ''; }, 300);
+
+          // Update the points chip if visible
+          const chip = document.querySelector('.stat-chip.gold');
+          if (chip) chip.textContent = `⭐ ${newTotal}`;
+        }
+      }, 160);
+    }
+  }, 60);
 }
 
 // ── Level Complete Screen ─────────────────────────────────────
