@@ -1,22 +1,38 @@
 // ─────────────────────────────────────────────────────────────
 // Adaptive placement engine
-// Runs a ~20-item sequence that converges on a recommended
-// starting level and scaffold for a new learner.
+//
+// No scaffolding during placement — every word is audio-only
+// (all blanks shown). Difficulty is varied by changing the
+// lexical level of the target word.
+//
+// Correct answer  → move up one level (harder words)
+// Incorrect answer → move down one level (easier words)
+//
+// After 20 items the learner typically oscillates between two
+// adjacent levels. The recommendation is the LOWEST level
+// visited in the final stabilisation window.
 // ─────────────────────────────────────────────────────────────
 
 import { ScaffoldLevel, PlacementItem, PlacementResult } from './types';
 import { spellingData, SpellingWord } from '../utils/spellingData';
-import { generateScaffold, stepUp, stepDown } from './scaffolding';
+import { generateScaffold } from './scaffolding';
 
 const PLACEMENT_TOTAL = 20;
+const INITIAL_LEVEL   = 3;           // start at mid-low difficulty
+const PLACEMENT_SCAFFOLD: ScaffoldLevel = 4; // audio only — no letter hints
 
-// Start in the middle of the difficulty space
-const INITIAL_LEVEL = 4;
-const INITIAL_SCAFFOLD: ScaffoldLevel = 2;
+// How many tail items to inspect when computing the recommendation.
+// The learner's level usually stabilises within the last third of the test.
+const STABILISATION_WINDOW = 8;
 
 interface TaggedWord {
   word: SpellingWord;
   level: number;
+}
+
+interface ResultRecord {
+  level: number;
+  correct: boolean;
 }
 
 /**
@@ -32,7 +48,6 @@ function buildPlacementPool(): TaggedWord[] {
     for (const stageNum of stagesToSample) {
       const words = stages[stageNum];
       if (!words || words.length === 0) continue;
-      // Take up to 2 words per sampled stage to keep the pool balanced
       pool.push({ word: words[0], level });
       if (words.length > 5) pool.push({ word: words[5], level });
     }
@@ -40,16 +55,9 @@ function buildPlacementPool(): TaggedWord[] {
   return pool;
 }
 
-interface ResultRecord {
-  level: number;
-  scaffold: ScaffoldLevel;
-  correct: boolean;
-}
-
 export class PlacementEngine {
   private pool: TaggedWord[];
   private currentLevel: number = INITIAL_LEVEL;
-  private currentScaffold: ScaffoldLevel = INITIAL_SCAFFOLD;
   private itemCount: number = 0;
   private results: ResultRecord[] = [];
   private currentWord: string = '';
@@ -58,42 +66,22 @@ export class PlacementEngine {
     this.pool = buildPlacementPool();
   }
 
-  /**
-   * Returns the first placement item.
-   * Call this to kick off the placement sequence.
-   */
+  /** Returns the first placement item. */
   start(): PlacementItem {
     return this.buildNextItem();
   }
 
-  /**
-   * Submits an answer for the current item.
-   * Returns the result and (if not done) the next item.
-   */
+  /** Submits an answer and returns the result + next item (or recommendation). */
   submit(input: string): PlacementResult {
     const isCorrect = input.trim().toLowerCase() === this.currentWord.toLowerCase();
 
-    this.results.push({
-      level: this.currentLevel,
-      scaffold: this.currentScaffold,
-      correct: isCorrect,
-    });
+    this.results.push({ level: this.currentLevel, correct: isCorrect });
 
-    // Adapt: correct → harder, incorrect → easier
+    // Adapt difficulty by level only — no scaffold changes
     if (isCorrect) {
-      if (this.currentScaffold < 4) {
-        this.currentScaffold = stepUp(this.currentScaffold);
-      } else {
-        this.currentLevel = Math.min(this.currentLevel + 1, 8);
-        this.currentScaffold = INITIAL_SCAFFOLD;
-      }
+      this.currentLevel = Math.min(this.currentLevel + 1, 8);
     } else {
-      if (this.currentScaffold > 0) {
-        this.currentScaffold = stepDown(this.currentScaffold);
-      } else {
-        this.currentLevel = Math.max(this.currentLevel - 1, 1);
-        this.currentScaffold = INITIAL_SCAFFOLD;
-      }
+      this.currentLevel = Math.max(this.currentLevel - 1, 1);
     }
 
     const done = this.results.length >= PLACEMENT_TOTAL;
@@ -107,7 +95,7 @@ export class PlacementEngine {
     };
   }
 
-  // ── Private helpers ──────────────────────────────────────────
+  // ── Private helpers ───────────────────────────────────────────
 
   private buildNextItem(): PlacementItem {
     const tagged = this.selectWord();
@@ -116,17 +104,15 @@ export class PlacementEngine {
 
     return {
       word: tagged.word.word,
-      display: generateScaffold(tagged.word.word, this.currentScaffold),
-      scaffoldLevel: this.currentScaffold,
+      // Always audio-only display — no letter hints during placement
+      display: generateScaffold(tagged.word.word, PLACEMENT_SCAFFOLD),
+      scaffoldLevel: PLACEMENT_SCAFFOLD,
       itemNumber: this.itemCount,
       total: PLACEMENT_TOTAL,
     };
   }
 
-  /**
-   * Picks a word from the pool close to the current target level.
-   * Falls back to any word if no exact-level match is available.
-   */
+  /** Picks a word from the pool at the current target level. */
   private selectWord(): TaggedWord {
     const candidates = this.pool.filter(t => t.level === this.currentLevel);
     const pool = candidates.length > 0 ? candidates : this.pool;
@@ -134,46 +120,15 @@ export class PlacementEngine {
   }
 
   /**
-   * After 20 items, identifies the level/scaffold band where
-   * the learner achieved ≥70% accuracy (their "sweet spot").
-   * Returns the hardest such level, and within that level the
-   * hardest scaffold where accuracy was ≥70%.
+   * Recommendation = the LOWEST level visited in the stabilisation window
+   * (the last STABILISATION_WINDOW results). This captures the lower bound
+   * of the level band the learner oscillated within.
+   * Scaffold recommendation is always S0 (full support) — the learning
+   * engine will adapt scaffold from there.
    */
   private computeRecommendation(): { level: number; scaffold: ScaffoldLevel } {
-    // Aggregate by level
-    const byLevel: Record<number, { correct: number; total: number }> = {};
-    for (const r of this.results) {
-      if (!byLevel[r.level]) byLevel[r.level] = { correct: 0, total: 0 };
-      byLevel[r.level].total++;
-      if (r.correct) byLevel[r.level].correct++;
-    }
-
-    // Find the highest level where accuracy ≥ 70%
-    let recommendedLevel = 1;
-    for (const [lvlStr, stats] of Object.entries(byLevel)) {
-      const lvl = parseInt(lvlStr, 10);
-      if (stats.correct / stats.total >= 0.7) {
-        recommendedLevel = Math.max(recommendedLevel, lvl);
-      }
-    }
-
-    // Within that level, find the hardest scaffold with ≥70% accuracy
-    const byScaffold: Record<number, { correct: number; total: number }> = {};
-    for (const r of this.results.filter(r => r.level === recommendedLevel)) {
-      if (!byScaffold[r.scaffold]) byScaffold[r.scaffold] = { correct: 0, total: 0 };
-      byScaffold[r.scaffold].total++;
-      if (r.correct) byScaffold[r.scaffold].correct++;
-    }
-
-    let recommendedScaffold: ScaffoldLevel = 0;
-    for (let s = 4; s >= 0; s--) {
-      const stats = byScaffold[s];
-      if (stats && stats.correct / stats.total >= 0.7) {
-        recommendedScaffold = s as ScaffoldLevel;
-        break;
-      }
-    }
-
-    return { level: recommendedLevel, scaffold: recommendedScaffold };
+    const tail = this.results.slice(-STABILISATION_WINDOW);
+    const recommendedLevel = Math.min(...tail.map(r => r.level));
+    return { level: recommendedLevel, scaffold: 0 };
   }
 }

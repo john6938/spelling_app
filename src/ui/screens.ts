@@ -181,21 +181,25 @@ export interface PlacementCallbacks {
 export function renderPlacement(item: PlacementItem, cb: PlacementCallbacks): void {
   const pct = Math.round((item.itemNumber / item.total) * 100);
 
+  // Placement is audio-only — no letter hints. Word length is shown as blank slots
+  // so the learner knows how many letters to type.
+  const blankSlots = item.display.map(() => `<span class="letter-slot blank"></span>`).join('');
+
   setApp(`
     <div class="card">
       <div class="card-title">Finding your level…</div>
-      <div class="card-subtitle">Item ${item.itemNumber} of ${item.total}</div>
+      <div class="card-subtitle">Listen and spell — item ${item.itemNumber} of ${item.total}</div>
       <div class="progress-bar-wrap">
         <div class="progress-bar-fill" style="width:${pct}%"></div>
       </div>
       <div class="mt-16 text-center">
         <button class="btn-audio" id="audio-btn">🔊 Say the word</button>
       </div>
-      <div class="letter-display mt-16">${letterSlotsHTML(item.display)}</div>
+      <div class="letter-display mt-12">${blankSlots}</div>
       <input
         type="text"
         id="answer-input"
-        placeholder="Type the word…"
+        placeholder="Type what you hear…"
         autocomplete="off"
         autocorrect="off"
         spellcheck="false"
