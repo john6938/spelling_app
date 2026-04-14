@@ -24,6 +24,6 @@ See FIGMA_VS_SPEC.md for full breakdown of divergences between the Figma prototy
 - [x] Build learning engine (placement, scaffolding, mastery, progression) — separate from motivation
 - [x] Build motivation system (points, streaks, bonus) — separate from learning engine
 - [x] Build recognition system (badge awards tied to learning milestones only)
-- [ ] Build UI (child-friendly, revised colour scheme)
+- [x] Build UI (child-friendly, revised colour scheme)
 - [ ] Wire audio (Web Speech API / SpeechSynthesis)
 - [ ] End-to-end test: adaptive placement → level completion → badge award

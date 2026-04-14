@@ -20,7 +20,6 @@ import { spellingData, SpellingWord } from '../utils/spellingData';
 import { generateScaffold, stepUp, stepDown, SCAFFOLD_POINTS } from './scaffolding';
 import {
   getMasteryThreshold,
-  isStageComplete,
   isNearMastery,
   computeLevelSummary,
   emptyStageProgress,
@@ -112,8 +111,8 @@ export class LearningEngine {
   private nearMasteryWord: SpellingWord | null = null;
   private inNearMasteryItem: boolean = false;
 
-  constructor(username: string) {
-    this.state = this.initialState(username);
+  constructor(username: string, savedState?: LearnerState) {
+    this.state = savedState ?? this.initialState(username);
     this.loadWordQueue();
   }
 
