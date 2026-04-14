@@ -552,12 +552,10 @@ export function renderPlacementResult(
       <button class="btn-primary mt-20" id="accept-btn">
         Start at Level ${recommendation.level} →
       </button>
-      <button class="btn-secondary mt-8" id="level1-btn">
-        Start at Level 1 instead
-      </button>
+      ${recommendation.level > 1 ? `<button class="btn-secondary mt-8" id="level1-btn">Start at Level 1 instead</button>` : ''}
     </div>
   `);
 
   document.getElementById('accept-btn')!.addEventListener('click', cb.onAccept);
-  document.getElementById('level1-btn')!.addEventListener('click', cb.onStartAtLevel1);
+  document.getElementById('level1-btn')?.addEventListener('click', cb.onStartAtLevel1);
 }

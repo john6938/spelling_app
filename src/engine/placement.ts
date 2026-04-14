@@ -1,30 +1,48 @@
 // ─────────────────────────────────────────────────────────────
 // Adaptive placement engine
 //
-// No scaffolding during placement — every word is audio-only
-// (all blanks shown). Difficulty is varied by changing the
-// lexical level of the target word.
+// Difficulty combines word LENGTH and PATTERN TYPE:
+//   composite difficulty = length + patternOffset
 //
-// Correct answer  → move up one level (harder words)
-// Incorrect answer → move down one level (easier words)
+//   patternType offsets (easier → harder):
+//     phoneme-grapheme  +0.0   (fully phonetic)
+//     orthographic      +0.5
+//     vowel-ambiguity   +1.0
+//     morphological     +1.5
+//     exceptional       +2.0
 //
-// After 20 items the learner typically oscillates between two
-// adjacent levels. The recommendation is the LOWEST level
-// visited in the final stabilisation window.
+// Correct answer  → increase target difficulty by 1
+// Incorrect answer → decrease target difficulty by 1 (floor = 2)
+// No word is ever shown twice during the same placement run.
+//
+// The pool extends down to 2-letter words (level 0) so that
+// even very early spellers converge on a useful starting point.
 // ─────────────────────────────────────────────────────────────
 
 import { ScaffoldLevel, PlacementItem, PlacementResult } from './types';
 import { spellingData, SpellingWord } from '../utils/spellingData';
 import { generateScaffold } from './scaffolding';
 
-const PLACEMENT_TOTAL = 20;
-const INITIAL_LEVEL   = 3;   // start at mid-low difficulty
-const MIN_LEVEL       = 0;   // level 0 = very simple 2-letter words
-const MAX_LEVEL       = 8;
-const PLACEMENT_SCAFFOLD: ScaffoldLevel = 4; // audio only — no letter hints
+const PLACEMENT_TOTAL      = 20;
+const INITIAL_DIFFICULTY   = 4;    // ~4-letter phoneme-grapheme word
+const INITIAL_LEVEL        = 3;    // mid-range lexical level
+const MIN_DIFFICULTY       = 2;    // floor: 2-letter phonetic words
+const MAX_LEVEL            = 8;
+const PLACEMENT_SCAFFOLD: ScaffoldLevel = 4; // no letter hints — audio only
+const STABILISATION_WINDOW = 8;    // tail items used for recommendation
 
-// How many tail items to inspect when computing the recommendation.
-const STABILISATION_WINDOW = 8;
+// patternType → difficulty offset (easier = lower)
+const PATTERN_OFFSET: Record<string, number> = {
+  'phoneme-grapheme': 0,
+  'orthographic':     0.5,
+  'vowel-ambiguity':  1,
+  'morphological':    1.5,
+  'exceptional':      2,
+};
+
+function wordDifficulty(w: SpellingWord): number {
+  return w.word.length + (PATTERN_OFFSET[w.patternType] ?? 0);
+}
 
 interface TaggedWord {
   word: SpellingWord;
@@ -36,53 +54,56 @@ interface ResultRecord {
   correct: boolean;
 }
 
-// Level 0: very simple 2-letter words for the bottom of the placement range.
-// Used only during placement — not part of the main learning content.
+// ── Level 0: simple 2-letter words ───────────────────────────
+// Used only during placement as the easiest fallback.
 const LEVEL_0_WORDS: SpellingWord[] = [
-  { word: 'at', difficulty: 0, pattern: 'vc',  patternType: 'phoneme-grapheme', frequency: 'high' },
-  { word: 'it', difficulty: 0, pattern: 'vc',  patternType: 'phoneme-grapheme', frequency: 'high' },
-  { word: 'in', difficulty: 0, pattern: 'vc',  patternType: 'phoneme-grapheme', frequency: 'high' },
-  { word: 'on', difficulty: 0, pattern: 'vc',  patternType: 'phoneme-grapheme', frequency: 'high' },
-  { word: 'up', difficulty: 0, pattern: 'vc',  patternType: 'phoneme-grapheme', frequency: 'high' },
-  { word: 'be', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
-  { word: 'do', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
-  { word: 'go', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
-  { word: 'he', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
-  { word: 'me', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
-  { word: 'we', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
-  { word: 'no', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
-  { word: 'so', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
-  { word: 'my', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
-  { word: 'by', difficulty: 0, pattern: 'cv',  patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'at', difficulty: 0, pattern: 'vc', patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'it', difficulty: 0, pattern: 'vc', patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'in', difficulty: 0, pattern: 'vc', patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'on', difficulty: 0, pattern: 'vc', patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'up', difficulty: 0, pattern: 'vc', patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'be', difficulty: 0, pattern: 'cv', patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'do', difficulty: 0, pattern: 'cv', patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'go', difficulty: 0, pattern: 'cv', patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'he', difficulty: 0, pattern: 'cv', patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'me', difficulty: 0, pattern: 'cv', patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'we', difficulty: 0, pattern: 'cv', patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'no', difficulty: 0, pattern: 'cv', patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'so', difficulty: 0, pattern: 'cv', patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'my', difficulty: 0, pattern: 'cv', patternType: 'phoneme-grapheme', frequency: 'high' },
+  { word: 'by', difficulty: 0, pattern: 'cv', patternType: 'phoneme-grapheme', frequency: 'high' },
 ];
 
-/**
- * Builds the placement word pool.
- * Level 0: simple 2-letter words (placement floor).
- * Levels 1–8: sampled from spellingData.
- */
+// ── Pool building ─────────────────────────────────────────────
+
 function buildPlacementPool(): TaggedWord[] {
   const pool: TaggedWord[] = LEVEL_0_WORDS.map(w => ({ word: w, level: 0 }));
-  const stagesToSample = [1, 5, 10];
+  const stagesToSample = [1, 3, 5, 7, 10];
 
   for (const [levelStr, stages] of Object.entries(spellingData)) {
     const level = parseInt(levelStr, 10);
     for (const stageNum of stagesToSample) {
       const words = stages[stageNum];
       if (!words || words.length === 0) continue;
-      pool.push({ word: words[0], level });
-      if (words.length > 5) pool.push({ word: words[5], level });
+      // Sample every other word per stage for variety
+      for (let i = 0; i < words.length; i += 2) {
+        pool.push({ word: words[i], level });
+      }
     }
   }
   return pool;
 }
 
+// ── Engine ────────────────────────────────────────────────────
+
 export class PlacementEngine {
   private pool: TaggedWord[];
-  private currentLevel: number = INITIAL_LEVEL;
-  private itemCount: number = 0;
-  private results: ResultRecord[] = [];
-  private currentWord: string = '';
+  private currentDifficulty: number = INITIAL_DIFFICULTY;
+  private currentLevel: number      = INITIAL_LEVEL;
+  private itemCount: number         = 0;
+  private results: ResultRecord[]   = [];
+  private currentWord: string       = '';
+  private usedWords                 = new Set<string>();
 
   constructor() {
     this.pool = buildPlacementPool();
@@ -99,11 +120,13 @@ export class PlacementEngine {
 
     this.results.push({ level: this.currentLevel, correct: isCorrect });
 
-    // Adapt difficulty by level only — no scaffold changes
+    // Adapt composite difficulty and level in tandem
     if (isCorrect) {
+      this.currentDifficulty++;
       this.currentLevel = Math.min(this.currentLevel + 1, MAX_LEVEL);
     } else {
-      this.currentLevel = Math.max(this.currentLevel - 1, MIN_LEVEL);
+      this.currentDifficulty = Math.max(this.currentDifficulty - 1, MIN_DIFFICULTY);
+      this.currentLevel = Math.max(this.currentLevel - 1, 0);
     }
 
     const done = this.results.length >= PLACEMENT_TOTAL;
@@ -122,11 +145,12 @@ export class PlacementEngine {
   private buildNextItem(): PlacementItem {
     const tagged = this.selectWord();
     this.currentWord = tagged.word.word;
+    this.currentLevel = tagged.level; // align level to what was actually served
+    this.usedWords.add(this.currentWord);
     this.itemCount++;
 
     return {
       word: tagged.word.word,
-      // Always audio-only display — no letter hints during placement
       display: generateScaffold(tagged.word.word, PLACEMENT_SCAFFOLD),
       scaffoldLevel: PLACEMENT_SCAFFOLD,
       itemNumber: this.itemCount,
@@ -134,25 +158,66 @@ export class PlacementEngine {
     };
   }
 
-  /** Picks a word from the pool at the current target level. */
+  /**
+   * Selects an unused word as close to the target composite difficulty as possible.
+   *
+   * Search order:
+   * 1. Exact composite difficulty match at current level
+   * 2. Closest composite difficulty match at current level
+   * 3. Closest composite difficulty match at any level (closest level as tiebreak)
+   */
   private selectWord(): TaggedWord {
-    const candidates = this.pool.filter(t => t.level === this.currentLevel);
-    const pool = candidates.length > 0 ? candidates : this.pool;
-    return pool[Math.floor(Math.random() * pool.length)];
+    const unused = this.pool.filter(t => !this.usedWords.has(t.word.word));
+
+    if (unused.length === 0) {
+      // All words exhausted — reuse any
+      return this.pool[Math.floor(Math.random() * this.pool.length)];
+    }
+
+    const targetDiff = this.currentDifficulty;
+
+    // 1. Exact difficulty match at current level
+    const exactBoth = unused.filter(
+      t => wordDifficulty(t.word) === targetDiff && t.level === this.currentLevel
+    );
+    if (exactBoth.length > 0) return pick(exactBoth);
+
+    // 2. Closest difficulty at current level
+    const atLevel = unused.filter(t => t.level === this.currentLevel);
+    if (atLevel.length > 0) {
+      atLevel.sort((a, b) =>
+        Math.abs(wordDifficulty(a.word) - targetDiff) -
+        Math.abs(wordDifficulty(b.word) - targetDiff)
+      );
+      // Only use if reasonably close (within 2 difficulty points)
+      if (Math.abs(wordDifficulty(atLevel[0].word) - targetDiff) <= 2) {
+        return atLevel[0];
+      }
+    }
+
+    // 3. Closest difficulty across all levels (closest level as tiebreak)
+    unused.sort((a, b) => {
+      const da = Math.abs(wordDifficulty(a.word) - targetDiff);
+      const db = Math.abs(wordDifficulty(b.word) - targetDiff);
+      if (da !== db) return da - db;
+      return Math.abs(a.level - this.currentLevel) - Math.abs(b.level - this.currentLevel);
+    });
+    return unused[0];
   }
 
   /**
-   * Recommendation = the LOWEST level visited in the stabilisation window
-   * (the last STABILISATION_WINDOW results). This captures the lower bound
-   * of the level band the learner oscillated within.
-   * Scaffold recommendation is always S0 (full support) — the learning
-   * engine will adapt scaffold from there.
+   * Recommendation = lowest level in the stabilisation window.
+   * Clamped to level 1 minimum (level 0 is placement-only).
    */
   private computeRecommendation(): { level: number; scaffold: ScaffoldLevel } {
     const tail = this.results.slice(-STABILISATION_WINDOW);
     const lowestInTail = Math.min(...tail.map(r => r.level));
-    // Level 0 is placement-only — clamp recommendation to level 1 minimum
-    const recommendedLevel = Math.max(lowestInTail, 1);
-    return { level: recommendedLevel, scaffold: 0 };
+    return { level: Math.max(lowestInTail, 1), scaffold: 0 };
   }
+}
+
+// ── Utilities ─────────────────────────────────────────────────
+
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
 }
