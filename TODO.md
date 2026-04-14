@@ -18,11 +18,11 @@ See FIGMA_VS_SPEC.md for full breakdown of divergences between the Figma prototy
 - [x] **Error response** — Both: reveal correct spelling and move on after 1.5s (Figma) AND increase scaffold level for the next word (spec). No progress reset, no penalty.
 
 ## Implementation (post-decisions)
-- [ ] Define scaffold levels formally (exact steps per word, step-up/step-down rules)
-- [ ] Define within-stage mastery threshold (e.g. is 9/10 the actual threshold or illustrative?)
+- [x] Define scaffold levels formally (exact steps per word, step-up/step-down rules)
+- [x] Define within-stage mastery threshold (e.g. is 9/10 the actual threshold or illustrative?)
 - [x] Build lexical data layer (words organised by level, stage, and linguistic challenge type)
 - [x] Build learning engine (placement, scaffolding, mastery, progression) — separate from motivation
-- [ ] Build motivation system (points, streaks, bonus) — separate from learning engine
+- [x] Build motivation system (points, streaks, bonus) — separate from learning engine
 - [ ] Build recognition system (badge awards tied to learning milestones only)
 - [ ] Build UI (child-friendly, revised colour scheme)
 - [ ] Wire audio (Web Speech API / SpeechSynthesis)
