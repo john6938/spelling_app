@@ -198,6 +198,12 @@ export interface PlacementCallbacks {
 export function renderPlacement(item: PlacementItem, cb: PlacementCallbacks): void {
   const pct = Math.round((item.itemNumber / item.total) * 100);
 
+  // Show one blank slot per letter so the learner knows the word length,
+  // but reveal no letter content.
+  const blankSlots = item.display
+    .map(() => `<span class="letter-slot blank"></span>`)
+    .join('');
+
   setApp(`
     <div class="card">
       <div class="card-title">Finding your level…</div>
@@ -206,9 +212,10 @@ export function renderPlacement(item: PlacementItem, cb: PlacementCallbacks): vo
         <div class="progress-bar-fill" style="width:${pct}%"></div>
       </div>
       <div class="muted text-center mt-8">Word ${item.itemNumber} of ${item.total}</div>
-      <div class="mt-20 text-center">
+      <div class="mt-16 text-center">
         <button class="btn-audio" id="audio-btn">🔊 Say the word</button>
       </div>
+      <div class="letter-display mt-12">${blankSlots}</div>
       <input
         type="text"
         id="answer-input"
@@ -216,7 +223,7 @@ export function renderPlacement(item: PlacementItem, cb: PlacementCallbacks): vo
         autocomplete="off"
         autocorrect="off"
         spellcheck="false"
-        class="mt-16"
+        class="mt-8"
       />
       <div class="mt-12" style="display:flex; gap:8px;">
         <button class="btn-primary" id="check-btn">Check ✓</button>
