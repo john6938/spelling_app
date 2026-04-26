@@ -6,10 +6,11 @@ let cachedVoice: SpeechSynthesisVoice | null | undefined = undefined;
 
 function selectGBFemaleVoice(): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis.getVoices();
+  const notMale = (v: SpeechSynthesisVoice) => !v.name.toLowerCase().includes('male');
   return (
     voices.find(v => v.name === 'Google UK English Female') ??
     voices.find(v => v.lang === 'en-GB' && v.name.toLowerCase().includes('female')) ??
-    voices.find(v => v.lang === 'en-GB') ??
+    voices.find(v => v.lang === 'en-GB' && notMale(v)) ??
     null
   );
 }
@@ -43,19 +44,12 @@ function makeUtterance(word: string): SpeechSynthesisUtterance {
 
 /**
  * Speaks a word aloud twice with a short pause, using GB English Female voice.
+ * Uses a single utterance to avoid Chrome's unreliable onend event.
  */
 export function speakWord(word: string): void {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
-
-  const first = makeUtterance(word);
-  first.onend = () => {
-    setTimeout(() => {
-      window.speechSynthesis.speak(makeUtterance(word));
-    }, 600);
-  };
-
-  window.speechSynthesis.speak(first);
+  window.speechSynthesis.speak(makeUtterance(`${word}. ${word}`));
 }
 
 export function isSpeechAvailable(): boolean {
