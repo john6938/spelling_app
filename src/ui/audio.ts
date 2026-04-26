@@ -2,7 +2,9 @@
 // Audio — Web Speech API (SpeechSynthesis)
 // ─────────────────────────────────────────────────────────────
 
-function getGBFemaleVoice(): SpeechSynthesisVoice | null {
+let cachedVoice: SpeechSynthesisVoice | null | undefined = undefined;
+
+function selectGBFemaleVoice(): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis.getVoices();
   return (
     voices.find(v => v.name === 'Google UK English Female') ??
@@ -10,6 +12,24 @@ function getGBFemaleVoice(): SpeechSynthesisVoice | null {
     voices.find(v => v.lang === 'en-GB') ??
     null
   );
+}
+
+/**
+ * Call once at app boot. Listens for voiceschanged and caches the preferred
+ * GB Female voice so it is ready before the learner first hears a word.
+ */
+export function primeVoices(): void {
+  if (!('speechSynthesis' in window)) return;
+  const tryCache = () => {
+    const v = selectGBFemaleVoice();
+    if (v) cachedVoice = v;
+  };
+  window.speechSynthesis.addEventListener('voiceschanged', tryCache);
+  tryCache(); // works immediately on Firefox; no-op on Chrome until event fires
+}
+
+function getGBFemaleVoice(): SpeechSynthesisVoice | null {
+  return cachedVoice !== undefined ? cachedVoice : selectGBFemaleVoice();
 }
 
 function makeUtterance(word: string): SpeechSynthesisUtterance {

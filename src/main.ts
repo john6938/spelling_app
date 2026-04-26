@@ -13,6 +13,8 @@ import {
   hasConsent, setConsent, saveSession, loadSession, getSavedUsername,
 } from './persistence/localStorage';
 
+import { primeVoices } from './ui/audio';
+
 import {
   renderLogin,
   renderDashboard,
@@ -278,4 +280,5 @@ function showQuiz(): void {
 // Boot
 // ─────────────────────────────────────────────────────────────
 
+primeVoices();
 showLogin();
